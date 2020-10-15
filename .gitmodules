@@ -1,0 +1,3 @@
+[submodule "segmentation-kit"]
+	path = segmentation-kit
+	url = https://github.com/julius-speech/segmentation-kit.git
