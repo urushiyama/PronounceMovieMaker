@@ -1,0 +1,3 @@
+mecab ~= 0.996.2
+jaconv ~= 0.2.4
+soundfile ~= 0.10.3.post1
