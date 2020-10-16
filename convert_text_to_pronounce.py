@@ -11,6 +11,7 @@ import sys
 import subprocess
 from pathlib import Path
 import shutil
+import random
 
 pronounce_tagger = MeCab.Tagger("--node-format=%pS%f[8] --unk-format=%M --eos-format=\n")
 
@@ -77,11 +78,13 @@ for textfile in scripts_path.glob('*.txt'):
 
         # wavファイルのサンプリングレートを44.1 kHzから16 kHzに変換する
         data, samplerate = librosa.load(str(wavfile), sr=16000)
+        # ついでにjuliusが0出力を除去することによる時間のずれを防ぐためのランダムノイズを追加する
+        data = list(map(lambda x: x + 1e-06 * random.random() - 5e-07 if x == 0 else x, data))
         target_wavfile = target_path.joinpath("{}.wav".format(stem))
-        sf.write(str(target_wavfile), data, 16000)
+        sf.write(str(target_wavfile), data, 16000, subtype="PCM_16")
 
         # Juliusに投げる発音のテキストデータを作成する
-        pronounce = jaconv.kata2hira(pronounce_tagger.parse(f.readline())).replace('。', ' sp ').replace('、', ' sp ')
+        pronounce = jaconv.kata2hira(pronounce_tagger.parse(f.readline())).replace('。', ' sp ').replace('、', ' sp ').replace('・', ' sp ')
         target_textfile = target_path.joinpath("{}.txt".format(stem))
         target_textfile.write_text(pronounce, encoding="utf-8")
 
@@ -113,11 +116,6 @@ for textfile in scripts_path.glob('*.txt'):
                 while frame / fps <= end:
                     if frame / fps < begin:
                         phoneme = previous_phoneme
-                        # try:
-                        #     image = images['silent']
-                        # except KeyError:
-                        #     image = images['fallback']
-                        # video.write(image)
 
                     if phoneme in {'a', 'i', 'u', 'e', 'o', 'nn'}:
                         try:
@@ -175,6 +173,10 @@ for textfile in scripts_path.glob('*.txt'):
                         # 上記以外の子音の処理
                         try:
                             image = images[phoneme]
+                            # undetermined分のフレームを現在のフレームの画像で埋める
+                            while undetermined > 0:
+                                video.write(image)
+                                undetermined -= 1
                             video.write(image)
                         except KeyError:
                             undetermined += 1
