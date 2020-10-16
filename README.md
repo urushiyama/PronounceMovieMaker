@@ -13,54 +13,94 @@
 PronounceMovieMaker
 ├─data
 │  ├─images
-│  │  ├─consonants
-│  │  │  ├─b
-│  │  │  ├─by
-│  │  │  ├─ch
-│  │  │  ├─d
-│  │  │  ├─dy
-│  │  │  ├─f
-│  │  │  ├─g
-│  │  │  ├─gy
-│  │  │  ├─h
-│  │  │  ├─hy
-│  │  │  ├─k
-│  │  │  ├─ky
-│  │  │  ├─m
-│  │  │  ├─my
-│  │  │  ├─n
-│  │  │  ├─ny
-│  │  │  ├─p
-│  │  │  ├─py
-│  │  │  ├─r
-│  │  │  ├─ry
-│  │  │  ├─s
-│  │  │  ├─sh
-│  │  │  ├─t
-│  │  │  ├─ts
-│  │  │  ├─ty
-│  │  │  ├─y
-│  │  │  ├─z
-│  │  │  └─zy
+│  │  ├─a
+│  │  ├─a-
+│  │  ├─b
+│  │  ├─background
+│  │  ├─by
+│  │  ├─ch
+│  │  ├─d
+│  │  ├─dy
+│  │  ├─e
+│  │  ├─e-
+│  │  ├─f
 │  │  ├─fallback
-│  │  ├─mora
-│  │  │  ├─N
-│  │  │  └─q
-│  │  ├─semivowels
-│  │  │  ├─j
-│  │  │  └─w
+│  │  ├─g
+│  │  ├─gy
+│  │  ├─h
+│  │  ├─hy
+│  │  ├─i
+│  │  ├─i-
+│  │  ├─j
+│  │  ├─k
+│  │  ├─ky
+│  │  ├─m
+│  │  ├─my
+│  │  ├─n
+│  │  ├─nn
+│  │  ├─ny
+│  │  ├─o
+│  │  ├─o-
+│  │  ├─p
+│  │  ├─py
+│  │  ├─q
+│  │  ├─r
+│  │  ├─ry
+│  │  ├─s
+│  │  ├─sh
 │  │  ├─silent
-│  │  └─vowels
-│  │      ├─a-
-│  │      ├─e
-│  │      ├─e-
-│  │      ├─i
-│  │      ├─i-
-│  │      ├─o
-│  │      ├─o-
-│  │      ├─u
-│  │      └─u-
+│  │  ├─t
+│  │  ├─ts
+│  │  ├─ty
+│  │  ├─u
+│  │  ├─u-
+│  │  ├─w
+│  │  ├─y
+│  │  ├─z
+│  │  └─zy
 │  └─scripts
-├─segmentation-kit (submodule)
+├─segmentation-kit (git submodule)
 └─target
 ```
+
+### data
+
+Put input files here.
+
+#### images
+
+- (Required) put fallback image in `fallback` directory
+    - this will be the image of ones which should be in other empty directories
+- (Optional) put background image in `background` directory
+    - useful such as for static body except face
+- (Optional) put faces of vowels in `a`, `i`, `u`, `e`, `o` directory
+- (Optional) put faces of longer vowels in `a-`, `i-`, `u-`, `e-`, `o-` directory
+- (Optional) put faces of N (撥音「ん」) in `nn` directory
+- (Optional) put faces of q (促音「っ」) in `q` directory
+- (Optional) put faces of silent (無声) in `silent` directory
+- (Optional) put faces of consonants in other directory
+
+#### scripts
+
+Put pairs of WAV file (voice) and TXT file (transcript in Japanese) with the same name except file extension.
+
+- Example
+
+```
+target
+├─source.wav
+└─source.txt
+```
+
+### target
+
+Output will be produced here.
+
+- `<source>.mp4`: Lip-sync movie without audio
+- `<source>-with-audio.mp4`: Lip-sync movie with audio
+
+## Usage
+
+1. Put input files under data directory with the rules described at [### data](#data) section
+2. Run `convert_text_to_pronounce.py` as a python script
+3. Check output files emerged in target directory :tada:
