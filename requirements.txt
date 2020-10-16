@@ -1,3 +1,7 @@
 mecab ~= 0.996.2
 jaconv ~= 0.2.4
 soundfile ~= 0.10.3.post1
+librosa ~= 0.8.0
+opencv-python ~= 4.4.0.44
+numpy ~= 1.18.5
+moviepy ~= 1.0.3
