@@ -1,4 +1,4 @@
-mecab~=0.996.2
+Janome==0.4.1
 jaconv~=0.2.4
 soundfile~=0.10.3.post1
 librosa~=0.8.0

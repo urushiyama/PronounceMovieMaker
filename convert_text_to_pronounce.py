@@ -1,4 +1,4 @@
-import MeCab
+from janome.tokenizer import Tokenizer
 import jaconv
 import soundfile as sf
 import librosa
@@ -15,7 +15,7 @@ import shutil
 import random
 from enum import Enum, auto
 
-pronounce_tagger = MeCab.Tagger("--node-format=%pS%f[8] --unk-format=%M --eos-format=\n")
+tokenizer = Tokenizer(mmap=False)
 
 data_path = Path('./data/')
 # 音声ファイル（wavファイル）とスクリプト（txtファイル）を入れておくフォルダ
@@ -89,7 +89,11 @@ def generate():
             sf.write(str(target_wavfile), data, 16000, subtype="PCM_16")
 
             # Juliusに投げる発音のテキストデータを作成する
-            pronounce = jaconv.kata2hira(pronounce_tagger.parse(f.readline())).replace('。', ' sp ').replace('、', ' sp ').replace('・', ' sp ')
+            pronounce = ''.join([token.surface if token.phonetic == '*' else token.phonetic for token in tokenizer.tokenize(jaconv.normalize(f.readline()))])
+            pronounce = jaconv.kata2hira(pronounce)
+            pronounce = pronounce.replace('。', ' sp ').replace('、', ' sp ').replace('・', ' sp ')
+            pronounce = pronounce.replace('「', '').replace('」', '')
+            pronounce = pronounce.replace('ゕ', 'か').replace('ゖ', 'か')
             target_textfile = target_path.joinpath("{}.txt".format(stem))
             target_textfile.write_text(pronounce, encoding="utf-8")
 

@@ -4,7 +4,6 @@
 
 - some environment to run python script (tested by [Anaconda](https://www.anaconda.com/products/individual))
 - some third-party python libraries (run `pip install -r requirements.txt` to use)
-- [MeCab](https://taku910.github.io/mecab/#download)
 - some environment to run perl script (tested by [ActivePerl](https://www.activestate.com/products/perl/downloads/))
 
 ## Directory Structure
