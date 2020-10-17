@@ -310,6 +310,7 @@ while True:
             continue
         
         main_window[WindowElementKey.OUTPUT].update(value='')
+        main_window[WindowElementKey.GENERATE_BUTTON].update(disabled=True)
 
         loadImages()
         # fallbackに画像がない場合には処理を停止する
