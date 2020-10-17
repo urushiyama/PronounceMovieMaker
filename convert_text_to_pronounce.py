@@ -19,9 +19,11 @@ tokenizer = Tokenizer(mmap=False)
 
 data_path = Path('./data/')
 # 音声ファイル（wavファイル）とスクリプト（txtファイル）を入れておくフォルダ
-scripts_path = data_path.joinpath('scripts/')
+def scripts_path():
+    return data_path.joinpath('scripts/')
 # 口パク動画生成用の画像を入れておくフォルダ
-images_path = data_path.joinpath('images/')
+def images_path():
+    return data_path.joinpath('images/')
 
 # ファイル出力先フォルダ
 target_path = Path('./target/')
@@ -52,7 +54,7 @@ def overlayImage(background, overlay, location):
 def loadImages():
     global height, width
     for extension in ('tiff', 'jpeg', 'jpg', 'png'):
-        for imagefile in images_path.glob("**/*.{}".format(extension)):
+        for imagefile in images_path().glob("**/*.{}".format(extension)):
             key = imagefile.parent.name
             image_array = np.fromfile(str(imagefile), dtype=np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
@@ -75,10 +77,10 @@ def overlayImagesOnBackground():
             images[k] = overlayImage(images['background'], images[k], (0, 0))
 
 def generate():
-    for textfile in scripts_path.glob('*.txt'):
+    for textfile in scripts_path().glob('*.txt'):
         with textfile.open(encoding="utf-8") as f:
             stem = textfile.stem
-            wavfile = scripts_path.joinpath("{}.wav".format(stem))
+            wavfile = scripts_path().joinpath("{}.wav".format(stem))
             if not wavfile.exists(): continue
 
             # wavファイルのサンプリングレートを44.1 kHzから16 kHzに変換する
@@ -244,29 +246,25 @@ required_data_directories = frozenset({
 def dataDirectoryIsFormatted():
     if not (data_path.exists() and data_path.is_dir()):
         return False
-    scripts_path = data_path.joinpath('scripts/')
-    images_path = data_path.joinpath('images/')
-    if not (scripts_path.exists() and scripts_path.is_dir()):
+    if not (scripts_path().exists() and scripts_path().is_dir()):
         return False
-    if not (images_path.exists() and images_path.is_dir()):
+    if not (images_path().exists() and images_path().is_dir()):
         return False
     images_children = set()
-    for child in images_path.iterdir():
+    for child in images_path().iterdir():
         images_children.add(child.name)
     return required_data_directories.issubset(images_children)
 
 def formatDataDirectory():
-    scripts_path = data_path.joinpath('scripts/')
-    images_path = data_path.joinpath('images/')
     try:
-        scripts_path.mkdir(exist_ok=True)
-        images_path.mkdir(exist_ok=True)
+        scripts_path().mkdir(exist_ok=True)
+        images_path().mkdir(exist_ok=True)
     except FileExistsError:
         sg.popup_error('データフォルダには次の名前のファイルを入れないでください：\r\nscripts, images')
         return False
     try:
         for required_directory in required_data_directories:
-            images_path.joinpath(required_directory).mkdir(exist_ok=True)
+            images_path().joinpath(required_directory).mkdir(exist_ok=True)
     except FileExistsError:
         sg.popup_error('データフォルダ下のimagesフォルダには次の名前のファイルを入れないでください：\r\n{}'.format(', '.join(required_data_directories)))
         return False
