@@ -5,8 +5,8 @@ import librosa
 import cv2
 import numpy as np
 from PIL import Image
-import moviepy.editor as mp
 import PySimpleGUI as sg
+import ffmpeg
 
 import sys
 import subprocess
@@ -34,7 +34,7 @@ images = {}
 width, height = (0, 0)
 
 # 口パク動画のFPS
-fps = 120
+fps = 60
 
 def overlayImage(background, overlay, location):
     background = cv2.cvtColor(background, cv2.COLOR_BGRA2RGBA)
@@ -59,6 +59,8 @@ def loadImages():
             image_array = np.fromfile(str(imagefile), dtype=np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
             if image is None: sys.exit('Error: cannot open image: {}'.format(str(imagefile)))
+            # Tweak for format image into BGRA. Alpha is retained.
+            image = overlayImage(image, image, (0, 0))
             images[key] = image
             h, w = image.shape[:2]
             if h > height: height = h
@@ -109,13 +111,14 @@ def generate():
             labfile.write_text(escaped)
 
             # 口パク動画のセットアップ
-            # mp4エンコーダ
-            fourcc = cv2.VideoWriter_fourcc(*'hev1')
-            # 出力する動画
-            target_videofile = target_path.joinpath("{}.mp4".format(stem))
-            video = cv2.VideoWriter(str(target_videofile), fourcc, fps, (width, height))
-            if not video.isOpened(): sys.exit("Error: cannot open video output: {}".format(str(target_textfile)))
-            video.set(cv2.CAP_PROP_CONVERT_RGB, 0)
+            target_videofile = target_path.joinpath("{}.mov".format(stem))
+
+            # 各フレームの画像を出力する
+            frames_path = target_path.joinpath('{}-frames'.format(stem))
+            if frames_path.exists():
+                shutil.rmtree(frames_path, ignore_errors=True)
+            frames_path.mkdir()
+
             frame = 0
             undetermined = 0
             previous_phoneme = 'silent'
@@ -135,10 +138,10 @@ def generate():
                                 image = images['fallback']
                             # undetermined分のフレームをphonemeに対応する母音の画像で埋める
                             while undetermined > 0:
-                                video.write(image)
+                                cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
                                 undetermined -= 1
                             # 現在のフレームをphonemeに対応する母音の画像で埋める
-                            video.write(image)
+                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
 
                         elif phoneme in {'a-', 'i-', 'u-', 'e-', 'o-'}:
                             try:
@@ -150,10 +153,10 @@ def generate():
                                     image = images['fallback']
                             # undetermined分のフレームをphonemeに対応する母音の画像で埋める
                             while undetermined > 0:
-                                video.write(image)
+                                cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
                                 undetermined -= 1
                             # 現在のフレームをphonemeに対応する母音の画像で埋める
-                            video.write(image)
+                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
 
                         elif phoneme in {'q'}:
                             try:
@@ -164,7 +167,7 @@ def generate():
                                     image = images[previous_phoneme]
                                 except KeyError:
                                     image = images['fallback']
-                            video.write(image)
+                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
                             frame += 1
                             continue
 
@@ -176,9 +179,9 @@ def generate():
                                 image = images['fallback']
                             # undetermined分のフレームを現在のフレームの画像で埋める
                             while undetermined > 0:
-                                video.write(image)
+                                cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
                                 undetermined -= 1
-                            video.write(image)
+                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
                         
                         else:
                             # 上記以外の子音の処理
@@ -186,9 +189,9 @@ def generate():
                                 image = images[phoneme]
                                 # undetermined分のフレームを現在のフレームの画像で埋める
                                 while undetermined > 0:
-                                    video.write(image)
+                                    cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
                                     undetermined -= 1
-                                video.write(image)
+                                cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
                             except KeyError:
                                 undetermined += 1
                         
@@ -196,15 +199,28 @@ def generate():
                         frame += 1
                         previous_phoneme = phoneme
                         continue
-                    
-            video.release()
+            
+            if target_videofile.exists():
+                target_videofile.unlink()
+            (
+                ffmpeg
+                .input(str(frames_path) + '/%07d.png', framerate=fps)
+                .output(str(target_videofile), vcodec='qtrle')
+                .run()
+            )
 
             # 出力した動画ファイルにもとの音声ファイルを埋め込んだファイルも出力する
-            target_avfile = target_path.joinpath('{}-with-audio.mp4'.format(stem))
-            videoclip = mp.VideoFileClip(str(target_videofile)).subclip()
-            audioclip = mp.AudioFileClip(str(target_wavfile))
-            avclip = videoclip.set_audio(audioclip)
-            avclip.write_videofile(str(target_avfile))
+            target_avfile = target_path.joinpath('{}-with-audio.mov'.format(stem))
+            if target_avfile.exists():
+                target_avfile.unlink()
+            input_video = ffmpeg.input(str(target_videofile))
+            input_audio = ffmpeg.input(str(target_wavfile))
+            (
+                ffmpeg
+                .concat(input_video, input_audio, v=1, a=1)
+                .output(str(target_avfile), vcodec='qtrle')
+                .run()
+            )
 
 sg.theme('BlueMono')
 

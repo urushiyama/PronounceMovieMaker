@@ -5,6 +5,7 @@
 - some environment to run python script (tested by [Anaconda](https://www.anaconda.com/products/individual))
 - some third-party python libraries (run `pip install -r requirements.txt` to use)
 - some environment to run perl script (tested by [ActivePerl](https://www.activestate.com/products/perl/downloads/))
+- ffmpeg should be installed and the path to its bin shoubld be created
 
 ## Directory Structure
 
@@ -100,6 +101,4 @@ Output will be produced here.
 
 ## Usage
 
-1. Put input files under data directory with the rules described at [### data](#data) section
-2. Run `convert_text_to_pronounce.py` as a python script
-3. Check output files emerged in target directory :tada:
+1. Just run `convert_text_to_pronounce.py` as Python code :tada:
