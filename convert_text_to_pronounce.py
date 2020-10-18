@@ -15,6 +15,26 @@ import shutil
 import random
 from enum import Enum, auto
 
+def subprocess_args(include_stdout=True):
+    if hasattr(subprocess, 'STARTUPINFO'):
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        env = os.environ
+    else:
+        si = None
+        env = None
+ 
+    if include_stdout:
+        ret = {'stdout': subprocess.PIPE}
+    else:
+        ret = {}
+ 
+    ret.update({'stdin': subprocess.DEVNULL,
+                'stderr': subprocess.DEVNULL,
+                'startupinfo': si,
+                'env': env })
+    return ret
+
 tokenizer = Tokenizer(mmap=False)
 
 data_path = Path('./data/')
@@ -102,7 +122,7 @@ def generate():
             target_textfile.write_text(pronounce, encoding="utf-8")
 
             # segment_julius.plを用いて音素セグメンテーションを行う
-            subprocess.run(['perl', './segment_julius.pl', str(target_path.resolve())], cwd='./segmentation-kit')
+            subprocess.run(['perl', './segment_julius.pl', str(target_path.resolve())], cwd='./segmentation-kit', **subprocess_args(True))
 
             # 音素セグメンテーションの結果からファイルパスとして使用できない[:]を[-]に、大文字小文字の区別不要のため[N]を[nn]に変換する
             labfile = target_path.joinpath("{}.lab".format(stem))
@@ -248,7 +268,7 @@ main_window = sg.Window('Pronounce Movie Maker', [
     [sg.InputText(default_text=str(target_path.resolve()), enable_events=True, pad=((15, 5), 3)), sg.FolderBrowse(initial_folder=str(target_path.resolve()), enable_events=True)],
     [sg.Text('5. 口パク動画を生成')],
     [sg.Button('生成', key=WindowElementKey.GENERATE_BUTTON, pad=((15, 5), 3))],
-    [sg.Output(pad=((15, 5), 3), key=WindowElementKey.OUTPUT)],
+    [sg.Output(pad=((15, 5), 3), echo_stdout_stderr=True, key=WindowElementKey.OUTPUT)],
     [sg.HorizontalSeparator()],
     [sg.Exit()]], finalize=True)
 
