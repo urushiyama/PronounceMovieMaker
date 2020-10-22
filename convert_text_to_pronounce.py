@@ -258,6 +258,7 @@ class WindowElementKey(Enum):
     FORMAT_BUTTON = auto()
     FORMAT_CHECKBOX = auto()
     GENERATE_TRANSCRIPT_BUTTON = auto()
+    FFMPEG_NEEDED_TEXT = auto()
     GENERATE_MOVIE_BUTTON = auto()
     OUTPUT = auto()
 
@@ -282,6 +283,7 @@ main_window = sg.Window('Pronounce Movie Maker', [
     [sg.Text('6. （必要であれば）よみがなを修正')],
     [sg.Text('※ひらがなと無声区間" sp "のみ入力可能です', font='Courier 9', pad=((15, 5), 3))],
     [sg.Text('7. 口パク動画を生成')],
+    [sg.Text('※ffmpegのインストールが必要です', font='Courier 9', key=WindowElementKey.FFMPEG_NEEDED_TEXT, visible=False, pad=((15, 5), 3))],
     [sg.Button('動画生成', key=WindowElementKey.GENERATE_MOVIE_BUTTON, pad=((15, 5), 3))],
     [sg.Output(pad=((15, 5), 3), echo_stdout_stderr=True, key=WindowElementKey.OUTPUT)],
     [sg.HorizontalSeparator()],
@@ -328,6 +330,9 @@ def target_directory_is_formatted():
         return False
     return True
 
+def ffmpeg_is_installed():
+    return shutil.which('ffmpeg') is not None
+
 while True:
     if data_directory_is_formatted():
         main_window[WindowElementKey.FORMAT_BUTTON].update(disabled=True)
@@ -337,10 +342,11 @@ while True:
         main_window[WindowElementKey.FORMAT_CHECKBOX].update(value=bool(FormatCheckerStatus.UNFORMATTED), text=FormatCheckerStatus.UNFORMATTED.value)
     if target_directory_is_formatted():
         main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=False)
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=not ffmpeg_is_installed())
     else:
         main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=True)
         main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
+    main_window[WindowElementKey.FFMPEG_NEEDED_TEXT].update(visible=not ffmpeg_is_installed())
     
     event, values = main_window.read()
 
