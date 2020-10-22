@@ -100,7 +100,7 @@ def overlayImagesOnBackground():
             if k == 'background': continue
             images[k] = overlayImage(images['background'], images[k], (0, 0))
 
-def generate():
+def generate_transcripts():
     for textfile in scripts_path().glob('*.txt'):
         stem = textfile.stem
 
@@ -118,125 +118,130 @@ def generate():
             pronounce = pronounce.replace('ゕ', 'か').replace('ゖ', 'か')
             target_textfile = target_path.joinpath("{}.txt".format(stem))
             target_textfile.write_text(pronounce, encoding="utf-8")
-    
-    sk = PySegmentKit(str(target_path))
 
+def segment_transcripts():
+    sk = PySegmentKit(str(target_path))
     try:
         segmented = sk.segment()
-        for result in segmented.keys():
-            stem = Path(result).stem
+        return segmented
+    except PSKError as e:
+        sg.popup_error('音素セグメンテーションができませんでした：{}'.format(e))
+        return None
 
-            # 口パク動画のセットアップ
-            target_videofile = target_path.joinpath("{}.mov".format(stem))
+def generate_movies(segmented):
+    for result in segmented.keys():
+        stem = Path(result).stem
+        target_wavfile = target_path.joinpath("{}.wav".format(stem))
 
-            # 各フレームの画像を出力する
-            frames_path = target_path.joinpath('{}-frames'.format(stem))
-            if frames_path.exists():
-                shutil.rmtree(frames_path, ignore_errors=True)
-            frames_path.mkdir()
+        # 口パク動画のセットアップ
+        target_videofile = target_path.joinpath("{}.mov".format(stem))
 
-            frame = 0
-            undetermined = 0
-            previous_phoneme = 'silent'
-            for begin, end, phoneme in segmented[result]:
-                # フォルダ名に合わせてリプレース
-                phoneme = phoneme.replace(':', '-').replace('N', 'nn')
-                while frame / fps <= end:
-                    if frame / fps < begin:
-                        phoneme = previous_phoneme
+        # 各フレームの画像を出力する
+        frames_path = target_path.joinpath('{}-frames'.format(stem))
+        if frames_path.exists():
+            shutil.rmtree(frames_path, ignore_errors=True)
+        frames_path.mkdir()
 
-                    if phoneme in {'a', 'i', 'u', 'e', 'o', 'nn'}:
+        frame = 0
+        undetermined = 0
+        previous_phoneme = 'silent'
+        for begin, end, phoneme in segmented[result]:
+            # フォルダ名に合わせてリプレース
+            phoneme = phoneme.replace(':', '-').replace('N', 'nn')
+            while frame / fps <= end:
+                if frame / fps < begin:
+                    phoneme = previous_phoneme
+
+                if phoneme in {'a', 'i', 'u', 'e', 'o', 'nn'}:
+                    try:
+                        image = images[phoneme]
+                    except KeyError:
+                        image = images['fallback']
+                    # undetermined分のフレームをphonemeに対応する母音の画像で埋める
+                    while undetermined > 0:
+                        cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
+                        undetermined -= 1
+                    # 現在のフレームをphonemeに対応する母音の画像で埋める
+                    cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
+
+                elif phoneme in {'a-', 'i-', 'u-', 'e-', 'o-'}:
+                    try:
+                        image = images[phoneme]
+                    except KeyError:
                         try:
-                            image = images[phoneme]
+                            image = images[phoneme[0]]
                         except KeyError:
                             image = images['fallback']
-                        # undetermined分のフレームをphonemeに対応する母音の画像で埋める
-                        while undetermined > 0:
-                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
-                            undetermined -= 1
-                        # 現在のフレームをphonemeに対応する母音の画像で埋める
-                        cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
+                    # undetermined分のフレームをphonemeに対応する母音の画像で埋める
+                    while undetermined > 0:
+                        cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
+                        undetermined -= 1
+                    # 現在のフレームをphonemeに対応する母音の画像で埋める
+                    cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
 
-                    elif phoneme in {'a-', 'i-', 'u-', 'e-', 'o-'}:
+                elif phoneme in {'q'}:
+                    try:
+                        image = images[phoneme]
+                    except KeyError:
                         try:
-                            image = images[phoneme]
-                        except KeyError:
-                            try:
-                                image = images[phoneme[0]]
-                            except KeyError:
-                                image = images['fallback']
-                        # undetermined分のフレームをphonemeに対応する母音の画像で埋める
-                        while undetermined > 0:
-                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
-                            undetermined -= 1
-                        # 現在のフレームをphonemeに対応する母音の画像で埋める
-                        cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
-
-                    elif phoneme in {'q'}:
-                        try:
-                            image = images[phoneme]
-                        except KeyError:
-                            try:
-                                # 促音の場合、それ以前の画像を引き伸ばすことを試みる
-                                image = images[previous_phoneme]
-                            except KeyError:
-                                image = images['fallback']
-                        cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
-                        frame += 1
-                        continue
-
-                    elif phoneme in {'silB', 'silE', 'sp'}:
-                        phoneme = 'silent'
-                        try:
-                            image = images['silent']
+                            # 促音の場合、それ以前の画像を引き伸ばすことを試みる
+                            image = images[previous_phoneme]
                         except KeyError:
                             image = images['fallback']
+                    cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
+                    frame += 1
+                    continue
+
+                elif phoneme in {'silB', 'silE', 'sp'}:
+                    phoneme = 'silent'
+                    try:
+                        image = images['silent']
+                    except KeyError:
+                        image = images['fallback']
+                    # undetermined分のフレームを現在のフレームの画像で埋める
+                    while undetermined > 0:
+                        cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
+                        undetermined -= 1
+                    cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
+                
+                else:
+                    # 上記以外の子音の処理
+                    try:
+                        image = images[phoneme]
                         # undetermined分のフレームを現在のフレームの画像で埋める
                         while undetermined > 0:
                             cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
                             undetermined -= 1
                         cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
-                    
-                    else:
-                        # 上記以外の子音の処理
-                        try:
-                            image = images[phoneme]
-                            # undetermined分のフレームを現在のフレームの画像で埋める
-                            while undetermined > 0:
-                                cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame - undetermined))), image)
-                                undetermined -= 1
-                            cv2.imwrite(str(frames_path.joinpath('{:07d}.png'.format(frame))), image)
-                        except KeyError:
-                            undetermined += 1
-                    
-                    print("frame {frame}: {phoneme}".format(frame = frame, phoneme = phoneme))
-                    frame += 1
-                    previous_phoneme = phoneme
-                    continue
-            
-            if target_videofile.exists():
-                target_videofile.unlink()
-            (
-                ffmpeg
-                .input(str(frames_path) + '/%07d.png', framerate=fps)
-                .output(str(target_videofile), vcodec='prores', pix_fmt='yuva444p10le')
-                .run()
-            )
+                    except KeyError:
+                        undetermined += 1
+                
+                print("frame {frame}: {phoneme}".format(frame = frame, phoneme = phoneme))
+                frame += 1
+                previous_phoneme = phoneme
+                continue
+        
+        if target_videofile.exists():
+            target_videofile.unlink()
+        (
+            ffmpeg
+            .input(str(frames_path) + '/%07d.png', framerate=fps)
+            .output(str(target_videofile), vcodec='prores', pix_fmt='yuva444p10le')
+            .run()
+        )
 
-            # 出力した動画ファイルにもとの音声ファイルを埋め込んだファイルも出力する
-            target_avfile = target_path.joinpath('{}-with-audio.mov'.format(stem))
-            if target_avfile.exists():
-                target_avfile.unlink()
-            input_video = ffmpeg.input(str(target_videofile))
-            input_audio = ffmpeg.input(str(target_wavfile))
-            (
-                ffmpeg
-                .concat(input_video, input_audio, v=1, a=1)
-                .output(str(target_avfile), vcodec='prores', pix_fmt='yuva444p10le')
-                .run()
-            )
-    except PSKError as e:
-        sg.popup_error('音素セグメンテーションができませんでした：{}'.format(e))
+        # 出力した動画ファイルにもとの音声ファイルを埋め込んだファイルも出力する
+        target_avfile = target_path.joinpath('{}-with-audio.mov'.format(stem))
+        if target_avfile.exists():
+            target_avfile.unlink()
+        input_video = ffmpeg.input(str(target_videofile))
+        input_audio = ffmpeg.input(str(target_wavfile))
+        (
+            ffmpeg
+            .concat(input_video, input_audio, v=1, a=1)
+            .output(str(target_avfile), vcodec='prores', pix_fmt='yuva444p10le')
+            .run()
+        )
 
 def format_sound(source_file, target_file):
     # wavファイルのサンプリングレートを44.1 kHzから16 kHzに変換する
@@ -261,7 +266,8 @@ sg.theme('BlueMono')
 class WindowElementKey(Enum):
     FORMAT_BUTTON = auto()
     FORMAT_CHECKBOX = auto()
-    GENERATE_BUTTON = auto()
+    GENERATE_TRANSCRIPT_BUTTON = auto()
+    GENERATE_MOVIE_BUTTON = auto()
     OUTPUT = auto()
 
 class FormatCheckerStatus(Enum):
@@ -280,8 +286,12 @@ main_window = sg.Window('Pronounce Movie Maker', [
     [sg.Text('4. 出力先フォルダを選択')],
     [sg.Text('※フォルダ名に半角スペースを含めないでください', font='Courier 9', pad=((15, 5), 3))],
     [sg.InputText(default_text=str(target_path.resolve()), enable_events=True, pad=((15, 5), 3)), sg.FolderBrowse(initial_folder=str(target_path.resolve()), enable_events=True)],
-    [sg.Text('5. 口パク動画を生成')],
-    [sg.Button('生成', key=WindowElementKey.GENERATE_BUTTON, pad=((15, 5), 3))],
+    [sg.Text('5. よみがなのテキストファイルを生成')],
+    [sg.Button('よみがな生成', key=WindowElementKey.GENERATE_TRANSCRIPT_BUTTON, pad=((15, 5), 3))],
+    [sg.Text('6. （必要であれば）よみがなを修正')],
+    [sg.Text('※ひらがなと無声区間" sp "のみ入力可能です', font='Courier 9', pad=((15, 5), 3))],
+    [sg.Text('7. 口パク動画を生成')],
+    [sg.Button('動画生成', key=WindowElementKey.GENERATE_MOVIE_BUTTON, pad=((15, 5), 3))],
     [sg.Output(pad=((15, 5), 3), echo_stdout_stderr=True, key=WindowElementKey.OUTPUT)],
     [sg.HorizontalSeparator()],
     [sg.Exit()]], finalize=True)
@@ -335,9 +345,11 @@ while True:
         main_window[WindowElementKey.FORMAT_BUTTON].update(disabled=False)
         main_window[WindowElementKey.FORMAT_CHECKBOX].update(value=bool(FormatCheckerStatus.UNFORMATTED), text=FormatCheckerStatus.UNFORMATTED.value)
     if targetDirectoryIsFormatted():
-        main_window[WindowElementKey.GENERATE_BUTTON].update(disabled=False)
+        main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=False)
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
     else:
-        main_window[WindowElementKey.GENERATE_BUTTON].update(disabled=True)
+        main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=True)
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
     
     event, values = main_window.read()
 
@@ -353,16 +365,20 @@ while True:
             sg.popup_error('データフォルダにはファイルシステム上に存在するフォルダを指定してください')
             continue
         formatDataDirectory()
-    if event == WindowElementKey.GENERATE_BUTTON:
-        if not (target_path.exists() and target_path.is_dir()):
-            sg.popup_error('出力先フォルダにはファイルシステム上に存在するフォルダを指定してください')
-            continue
-        if ' ' in target_path.name:
-            sg.popup_error('出力先フォルダ名には半角スペースを含めないでください')
-            continue
-        
+    if event == WindowElementKey.GENERATE_TRANSCRIPT_BUTTON:
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
+        generate_transcripts()
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
+    if event == WindowElementKey.GENERATE_MOVIE_BUTTON:
         main_window[WindowElementKey.OUTPUT].update(value='')
-        main_window[WindowElementKey.GENERATE_BUTTON].update(disabled=True)
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
+
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
+        segmented = segment_transcripts()
+        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
+
+        if segmented == None:
+            continue
 
         loadImages()
         # fallbackに画像がない場合には処理を停止する
@@ -371,4 +387,4 @@ while True:
             continue
         resizeImages()
         overlayImagesOnBackground()
-        generate()
+        generate_movies(segmented)
