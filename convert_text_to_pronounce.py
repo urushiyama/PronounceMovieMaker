@@ -226,7 +226,7 @@ def generate():
             (
                 ffmpeg
                 .input(str(frames_path) + '/%07d.png', framerate=fps)
-                .output(str(target_videofile), vcodec='qtrle')
+                .output(str(target_videofile), vcodec='prores', pix_fmt='yuva444p10le')
                 .run()
             )
 
@@ -239,7 +239,7 @@ def generate():
             (
                 ffmpeg
                 .concat(input_video, input_audio, v=1, a=1)
-                .output(str(target_avfile), vcodec='qtrle')
+                .output(str(target_avfile), vcodec='prores', pix_fmt='yuva444p10le')
                 .run()
             )
 
