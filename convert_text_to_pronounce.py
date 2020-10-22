@@ -8,6 +8,7 @@ from PIL import Image
 import PySimpleGUI as sg
 import ffmpeg
 
+import os
 import sys
 import subprocess
 from pathlib import Path
