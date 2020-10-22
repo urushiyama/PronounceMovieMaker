@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+from enum import Enum, auto
+from pathlib import Path
+import random
+import sys
+import shutil
+
 from janome.tokenizer import Tokenizer
 import jaconv
 import soundfile as sf
@@ -8,34 +15,6 @@ from PIL import Image
 import PySimpleGUI as sg
 import ffmpeg
 from PySegmentKit import PySegmentKit, PSKError
-
-import os
-import sys
-import subprocess
-from pathlib import Path
-import shutil
-import random
-from enum import Enum, auto
-
-def subprocess_args(include_stdout=True):
-    if hasattr(subprocess, 'STARTUPINFO'):
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        env = os.environ
-    else:
-        si = None
-        env = None
- 
-    if include_stdout:
-        ret = {'stdout': subprocess.PIPE}
-    else:
-        ret = {}
- 
-    ret.update({'stdin': subprocess.DEVNULL,
-                'stderr': subprocess.DEVNULL,
-                'startupinfo': si,
-                'env': env })
-    return ret
 
 tokenizer = Tokenizer(mmap=False)
 
@@ -58,7 +37,7 @@ width, height = (0, 0)
 # 口パク動画のFPS
 fps = 60
 
-def overlayImage(background, overlay, location):
+def overlay_image(background, overlay, location):
     background = cv2.cvtColor(background, cv2.COLOR_BGRA2RGBA)
     pil_background = Image.fromarray(np.uint8(background))
     pil_background = pil_background.convert('RGBA')
@@ -73,32 +52,44 @@ def overlayImage(background, overlay, location):
 
     return cv2.cvtColor(np.asarray(result_image), cv2.COLOR_RGBA2BGRA)
 
-def loadImages():
+def load_images():
     global height, width
+    load_error_flag = False
+    load_error_images_path = images_path().joinpath('load_errors/')
+    if load_error_images_path.exists():
+        shutil.rmtree(load_error_images_path, ignore_errors=True)
     for extension in ('tiff', 'jpeg', 'jpg', 'png'):
         for imagefile in images_path().glob("**/*.{}".format(extension)):
             key = imagefile.parent.name
             image_array = np.fromfile(str(imagefile), dtype=np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
-            if image is None: sys.exit('Error: cannot open image: {}'.format(str(imagefile)))
+            if image is None:
+                sg.popup_error('次の画像を開けませんでした: {}'.format(str(imagefile)))
+                load_error_flag = True
+                if not load_error_images_path.exists():
+                    load_error_images_path.mkdir()
+                shutil.move(str(imagefile), str(load_error_images_path))
+                continue
             # Tweak for format image into BGRA. Alpha is retained.
-            image = overlayImage(image, image, (0, 0))
+            image = overlay_image(image, image, (0, 0))
             images[key] = image
             h, w = image.shape[:2]
             if h > height: height = h
             if w > width: width = w
+    if load_error_flag:
+        sg.popup_ok('開けなかった画像は次のフォルダに移動しました：{}\nこれらの画像は口パク動画の生成には使用されません。'.format(str(load_error_images_path)))
 
-def resizeImages():
+def resize_images():
     # 最大の画像の縦横サイズに縮尺を合わせる
     for k in images.keys():
         images[k] = cv2.resize(images[k], (width, height))
 
-def overlayImagesOnBackground():
+def overlay_images_on_background():
     # 背景画像がある場合には組み合わせておく
     if 'background' in images:
         for k in images.keys():
             if k == 'background': continue
-            images[k] = overlayImage(images['background'], images[k], (0, 0))
+            images[k] = overlay_image(images['background'], images[k], (0, 0))
 
 def generate_transcripts():
     for textfile in scripts_path().glob('*.txt'):
@@ -303,7 +294,7 @@ required_data_directories = frozenset({
     's', 'sh', 't', 'ts', 'ty', 'w', 'y', 'z', 'zy',
     'nn', 'q', 'fallback', 'silent', 'background'})
 
-def dataDirectoryIsFormatted():
+def data_directory_is_formatted():
     if not (data_path.exists() and data_path.is_dir()):
         return False
     if not (scripts_path().exists() and scripts_path().is_dir()):
@@ -315,7 +306,7 @@ def dataDirectoryIsFormatted():
         images_children.add(child.name)
     return required_data_directories.issubset(images_children)
 
-def formatDataDirectory():
+def format_data_directory():
     try:
         scripts_path().mkdir(exist_ok=True)
         images_path().mkdir(exist_ok=True)
@@ -330,7 +321,7 @@ def formatDataDirectory():
         return False
     return True
 
-def targetDirectoryIsFormatted():
+def target_directory_is_formatted():
     if not (target_path.exists() and target_path.is_dir()):
         return False
     if ' ' in target_path.name:
@@ -338,13 +329,13 @@ def targetDirectoryIsFormatted():
     return True
 
 while True:
-    if dataDirectoryIsFormatted():
+    if data_directory_is_formatted():
         main_window[WindowElementKey.FORMAT_BUTTON].update(disabled=True)
         main_window[WindowElementKey.FORMAT_CHECKBOX].update(value=bool(FormatCheckerStatus.FORMATTED), text=FormatCheckerStatus.FORMATTED.value)
     else:
         main_window[WindowElementKey.FORMAT_BUTTON].update(disabled=False)
         main_window[WindowElementKey.FORMAT_CHECKBOX].update(value=bool(FormatCheckerStatus.UNFORMATTED), text=FormatCheckerStatus.UNFORMATTED.value)
-    if targetDirectoryIsFormatted():
+    if target_directory_is_formatted():
         main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=False)
         main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
     else:
@@ -364,7 +355,7 @@ while True:
         if not (data_path.exists() and data_path.is_dir()):
             sg.popup_error('データフォルダにはファイルシステム上に存在するフォルダを指定してください')
             continue
-        formatDataDirectory()
+        format_data_directory()
     if event == WindowElementKey.GENERATE_TRANSCRIPT_BUTTON:
         main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
         generate_transcripts()
@@ -380,11 +371,11 @@ while True:
         if segmented == None:
             continue
 
-        loadImages()
+        load_images()
         # fallbackに画像がない場合には処理を停止する
         if not 'fallback' in images:
             sg.popup_error('imagesフォルダ下のfallbackフォルダには元データとなる画像を入れてください')
             continue
-        resizeImages()
-        overlayImagesOnBackground()
+        resize_images()
+        overlay_images_on_background()
         generate_movies(segmented)
