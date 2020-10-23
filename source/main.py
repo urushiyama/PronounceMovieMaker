@@ -33,8 +33,8 @@ from kivy.core.window import Window
 from kivy.core.text import LabelBase, DEFAULT_FONT
 from kivy.resources import resource_add_path
 
-resource_add_path("./resources")
-LabelBase.register(DEFAULT_FONT, "SourceHanSans-Regular.ttc")
+resource_add_path('./resources')
+LabelBase.register(DEFAULT_FONT, "fonts/SourceHanSans-Regular.ttc")
 
 class Error(Exception):
     """ the base class of this application errors.
