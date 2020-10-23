@@ -12,13 +12,62 @@ import librosa
 import cv2
 import numpy as np
 from PIL import Image
-import PySimpleGUI as sg
 import ffmpeg
 from PySegmentKit import PySegmentKit, PSKError
+from pathvalidate import ValidationError, validate_filepath
+
+from kivy.config import Config
+Config.set('graphics', 'width', 400)
+Config.set('graphics', 'height', 520)
+Config.set('graphics', 'resizable', False)
+import japanize_kivy
+import kivy
+from kivy.app import App
+from kivy.uix.floatlayout import FloatLayout
+from kivy.factory import Factory
+from kivy.properties import ObjectProperty
+from kivy.uix.popup import Popup
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.checkbox import CheckBox
+from kivy.core.window import Window
+
+class Error(Exception):
+    """ the base class of this application errors.
+
+    Attributes:
+        message -- short message which describes the error.
+        description -- long description of the error.
+    """
+    def __init__(self, message, description):
+        self.message = message
+        self.description = description
+
+    def __str__(self):
+        return self.message
+
+class LoadImageError(Error):
+    """ raised when image loading is failed.
+    """
+    pass
+
+class SegmentationError(Error):
+    """ raised when phoneme segmentation is failed.
+    """
+    pass
+
+class FormatDataDirectoryError(Error):
+    """ raised when data directory formatting is failed.
+    """
+    pass
+
+class AccessTargetDirectoryError(Error):
+    """ raised when target directory access is failed.
+    """
 
 tokenizer = Tokenizer(mmap=False)
 
-data_path = Path('./data/')
+data_path = Path('')
 # 音声ファイル（wavファイル）とスクリプト（txtファイル）を入れておくフォルダ
 def scripts_path():
     return data_path.joinpath('scripts/')
@@ -27,7 +76,7 @@ def images_path():
     return data_path.joinpath('images/')
 
 # ファイル出力先フォルダ
-target_path = Path('./target/')
+target_path = Path('')
 
 # 元画像データのキャッシュ
 images = {}
@@ -54,7 +103,7 @@ def overlay_image(background, overlay, location):
 
 def load_images():
     global height, width
-    load_error_flag = False
+    load_error_description = ""
     load_error_images_path = images_path().joinpath('load_errors/')
     if load_error_images_path.exists():
         shutil.rmtree(load_error_images_path, ignore_errors=True)
@@ -64,8 +113,7 @@ def load_images():
             image_array = np.fromfile(str(imagefile), dtype=np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
             if image is None:
-                sg.popup_error('次の画像を開けませんでした: {}'.format(str(imagefile)))
-                load_error_flag = True
+                load_error_description += '- {}\n'.format(str(imagefile))
                 if not load_error_images_path.exists():
                     load_error_images_path.mkdir()
                 shutil.move(str(imagefile), str(load_error_images_path))
@@ -76,8 +124,9 @@ def load_images():
             h, w = image.shape[:2]
             if h > height: height = h
             if w > width: width = w
-    if load_error_flag:
-        sg.popup_ok('開けなかった画像は次のフォルダに移動しました：{}\nこれらの画像は口パク動画の生成には使用されません。'.format(str(load_error_images_path)))
+    if load_error_description != "":
+        load_error_description += '開けなかった画像は次のフォルダに移動しました：{}\nこれらの画像は口パク動画の生成には使用されません。'.format(str(load_error_images_path))
+        raise LoadImageError('画像を開けませんでした', load_error_description)
 
 def resize_images():
     # 最大の画像の縦横サイズに縮尺を合わせる
@@ -116,8 +165,7 @@ def segment_transcripts():
         segmented = sk.segment()
         return segmented
     except PSKError as e:
-        sg.popup_error('音素セグメンテーションができませんでした：{}'.format(e))
-        return None
+        raise SegmentationError('音素セグメンテーションができませんでした', str(e))
 
 def generate_movies(segmented):
     for result in segmented.keys():
@@ -252,42 +300,27 @@ def _add_random_noise_to_sound(source_file: Path, target_file: Path, subtype="PC
         data = list(map(lambda x: x + noise_amp * 2 * random.random() - noise_amp, data))
     sf.write(str(target_file), data, sample_rate, subtype=subtype)
 
-sg.theme('BlueMono')
-
-class WindowElementKey(Enum):
-    FORMAT_BUTTON = auto()
-    FORMAT_CHECKBOX = auto()
-    GENERATE_TRANSCRIPT_BUTTON = auto()
-    FFMPEG_NEEDED_TEXT = auto()
-    GENERATE_MOVIE_BUTTON = auto()
-    OUTPUT = auto()
-
 class FormatCheckerStatus(Enum):
+    UNSPECIFIED = 'データフォルダ未指定'
     UNFORMATTED = '未フォーマット'
     FORMATTED = 'フォーマット済み'
     
     def __bool__(self):
         return self == FormatCheckerStatus.FORMATTED
 
-main_window = sg.Window('Pronounce Movie Maker', [
-    [sg.Text('1. データフォルダを選択')],
-    [sg.InputText(default_text=str(data_path.resolve()), enable_events=True, pad=((15, 5), 3)), sg.FolderBrowse(initial_folder=str(data_path.resolve()), enable_events=True)],
-    [sg.Text('2. データフォルダをフォーマット')],
-    [sg.Button('フォーマット', key=WindowElementKey.FORMAT_BUTTON, pad=((15, 5), 3)), sg.Checkbox(FormatCheckerStatus.UNFORMATTED.value, disabled=True, key=WindowElementKey.FORMAT_CHECKBOX) ],
-    [sg.Text('3. データフォルダ内部に画像を配置（png, jpg, tiff）')],
-    [sg.Text('4. 出力先フォルダを選択')],
-    [sg.Text('※フォルダ名に半角スペースを含めないでください', font='Courier 9', pad=((15, 5), 3))],
-    [sg.InputText(default_text=str(target_path.resolve()), enable_events=True, pad=((15, 5), 3)), sg.FolderBrowse(initial_folder=str(target_path.resolve()), enable_events=True)],
-    [sg.Text('5. よみがなのテキストファイルを生成')],
-    [sg.Button('よみがな生成', key=WindowElementKey.GENERATE_TRANSCRIPT_BUTTON, pad=((15, 5), 3))],
-    [sg.Text('6. （必要であれば）よみがなを修正')],
-    [sg.Text('※ひらがなと無声区間" sp "のみ入力可能です', font='Courier 9', pad=((15, 5), 3))],
-    [sg.Text('7. 口パク動画を生成')],
-    [sg.Text('※ffmpegのインストールが必要です', font='Courier 9', key=WindowElementKey.FFMPEG_NEEDED_TEXT, visible=False, pad=((15, 5), 3))],
-    [sg.Button('動画生成', key=WindowElementKey.GENERATE_MOVIE_BUTTON, pad=((15, 5), 3))],
-    [sg.Output(pad=((15, 5), 3), echo_stdout_stderr=True, key=WindowElementKey.OUTPUT)],
-    [sg.HorizontalSeparator()],
-    [sg.Exit()]], finalize=True)
+class FFMPEGCheckerStatus(Enum):
+    NOT_INSTALLED = '※ffmpegのインストールが必要です'
+    INSTALLED = '※ffmpegのインストールを確認できました'
+
+    def __bool__(self):
+        return self == FFMPEGCheckerStatus.INSTALLED
+    
+    @classmethod
+    def from_bool(cls, installed: bool):
+        if installed:
+            return FFMPEGCheckerStatus.INSTALLED
+        else:
+            return FFMPEGCheckerStatus.NOT_INSTALLED
 
 required_data_directories = frozenset({
     'a', 'a-', 'i', 'i-', 'u', 'u-', 'e', 'e-', 'o', 'o-',
@@ -295,6 +328,13 @@ required_data_directories = frozenset({
     'j', 'k', 'ky', 'm', 'my', 'n', 'ny', 'p', 'py', 'r', 'ry',
     's', 'sh', 't', 'ts', 'ty', 'w', 'y', 'z', 'zy',
     'nn', 'q', 'fallback', 'silent', 'background'})
+
+def path_is_valid(path):
+    try:
+        validate_filepath(str(path), platform='auto')
+    except ValidationError as e:
+        return False
+    return str(path) != '.'
 
 def data_directory_is_formatted():
     if not (data_path.exists() and data_path.is_dir()):
@@ -313,17 +353,16 @@ def format_data_directory():
         scripts_path().mkdir(exist_ok=True)
         images_path().mkdir(exist_ok=True)
     except FileExistsError:
-        sg.popup_error('データフォルダには次の名前のファイルを入れないでください：\r\nscripts, images')
-        return False
+        raise FormatDataDirectoryError('データフォルダのフォーマットができませんでした', 'データフォルダには次の名前のファイルを入れないでください：\nscripts, images')
     try:
         for required_directory in required_data_directories:
             images_path().joinpath(required_directory).mkdir(exist_ok=True)
     except FileExistsError:
-        sg.popup_error('データフォルダ下のimagesフォルダには次の名前のファイルを入れないでください：\r\n{}'.format(', '.join(required_data_directories)))
-        return False
-    return True
+        raise FormatDataDirectoryError('データフォルダのフォーマットができませんでした', 'データフォルダ下のimagesフォルダには次の名前のファイルを入れないでください：\n{}'.format(', '.join(required_data_directories)))
 
 def target_directory_is_formatted():
+    if not path_is_valid(target_path):
+        return False
     if not (target_path.exists() and target_path.is_dir()):
         return False
     if ' ' in target_path.name:
@@ -333,55 +372,135 @@ def target_directory_is_formatted():
 def ffmpeg_is_installed():
     return shutil.which('ffmpeg') is not None
 
-while True:
-    if data_directory_is_formatted():
-        main_window[WindowElementKey.FORMAT_BUTTON].update(disabled=True)
-        main_window[WindowElementKey.FORMAT_CHECKBOX].update(value=bool(FormatCheckerStatus.FORMATTED), text=FormatCheckerStatus.FORMATTED.value)
-    else:
-        main_window[WindowElementKey.FORMAT_BUTTON].update(disabled=False)
-        main_window[WindowElementKey.FORMAT_CHECKBOX].update(value=bool(FormatCheckerStatus.UNFORMATTED), text=FormatCheckerStatus.UNFORMATTED.value)
-    if target_directory_is_formatted():
-        main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=False)
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=not ffmpeg_is_installed())
-    else:
-        main_window[WindowElementKey.GENERATE_TRANSCRIPT_BUTTON].update(disabled=True)
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
-    main_window[WindowElementKey.FFMPEG_NEEDED_TEXT].update(visible=not ffmpeg_is_installed())
+class LoadDialog(FloatLayout):
+    load = ObjectProperty(None)
+    cancel = ObjectProperty(None)
+
+    def is_dir(self, dirname, filename):
+        return Path(dirname).joinpath(filename).is_dir()
+
+class ErrorDialog(FloatLayout):
+    description = ObjectProperty(None)
+    cancel = ObjectProperty(None)
+
+class Root(FloatLayout):
+    datafile_input = ObjectProperty(None)
+    targetfile_input = ObjectProperty(None)
+    ffmpeg_checker_label = ObjectProperty(Label())
+    format_button = ObjectProperty(Button())
+    format_checkbox = ObjectProperty(CheckBox())
+    format_label = ObjectProperty(Label())
+    transcript_button = ObjectProperty(Button())
+    movie_button = ObjectProperty(Button())
+
+    def textinput_focus(self, target, value):
+        global data_path, target_path
+        if not value:
+            data_path = Path(self.datafile_input.text)
+            target_path = Path(self.targetfile_input.text)
+            self.update_view()
+
+    def dismiss_popup(self):
+        self.update_view()
+        self._popup.dismiss()
     
-    event, values = main_window.read()
+    def show_data_load(self):
+        content = LoadDialog(load=self.data_load, cancel=self.dismiss_popup)
+        self._popup = Popup(title="データフォルダを選択してください", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+    
+    def data_load(self, path, filename):
+        global data_path
+        self.datafile_input.text = path
+        data_path = Path(path)
+        self.dismiss_popup()
+    
+    def show_target_load(self):
+        content = LoadDialog(load=self.target_load, cancel=self.dismiss_popup)
+        self._popup = Popup(title="出力先フォルダを選択してください", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+    
+    def target_load(self, path, filename):
+        global target_path
+        self.targetfile_input.text = path
+        target_path = Path(path)
+        self.dismiss_popup()
 
-    if event == sg.WIN_CLOSED or event == 'Exit':
-        main_window.close()
-        sys.exit(0)
+    def format_data_directory_pressed(self):
+        self.format_button.disabled = True
+        try:
+            if not (path_is_valid(data_path) and data_path.exists()):
+                raise FormatDataDirectoryError('データフォルダのフォーマットができませんでした', '指定したデータフォルダのパスを確認してください')
+            format_data_directory()
+        except Error as e:
+            content = ErrorDialog(description=e.description, cancel=self.dismiss_popup)
+            self._popup = Popup(title=e.message, content=content, size_hint=(0.9, 0.9))
+            self._popup.open()
+        self.update_view()
 
-    data_path = Path(values[0])
-    target_path = Path(values[1])
+    def generate_transcripts_pressed(self):
+        self.movie_button.disabled = True
+        try:
+            if not target_directory_is_formatted():
+                raise AccessTargetDirectoryError('出力先フォルダにアクセスできませんでした', '出力先フォルダには既に存在するフォルダ名を指定してください')
+            generate_transcripts()
+        except Error as e:
+            content = ErrorDialog(description=e.description, cancel=self.dismiss_popup)
+            self._popup = Popup(title=e.message, content=content, size_hint=(0.9, 0.9))
+            self._popup.open()
+        self.movie_button.disabled = False
 
-    if event == WindowElementKey.FORMAT_BUTTON:
-        if not (data_path.exists() and data_path.is_dir()):
-            sg.popup_error('データフォルダにはファイルシステム上に存在するフォルダを指定してください')
-            continue
-        format_data_directory()
-    if event == WindowElementKey.GENERATE_TRANSCRIPT_BUTTON:
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
-        generate_transcripts()
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
-    if event == WindowElementKey.GENERATE_MOVIE_BUTTON:
-        main_window[WindowElementKey.OUTPUT].update(value='')
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
+    def generate_movies_pressed(self):
+        self.movie_button.disabled = True
+        self.transcript_button.disabled = True
+        try:
+            if not target_directory_is_formatted():
+                raise AccessTargetDirectoryError('出力先フォルダにアクセスできませんでした', '出力先フォルダには既に存在するフォルダ名を指定してください')
+            segmented = segment_transcripts()
+            self.transcript_button.disabled = False
+            load_images()
+            # fallbackに画像がない場合には処理を停止する
+            if not 'fallback' in images:
+                raise LoadImageError('必要な画像が不足しています', 'imagesフォルダ下のfallbackフォルダには元データとなる画像を入れてください')
+            resize_images()
+            overlay_images_on_background()
+            generate_movies(segmented)
+        except Error as e:
+            content = ErrorDialog(description=e.description, cancel=self.dismiss_popup)
+            self._popup = Popup(title=e.message, content=content, size_hint=(0.9, 0.9))
+            self._popup.open()
+        self.transcript_button.disabled = False
+        self.movie_button.disabled = False
+    
+    def update_view(self):
+        self.ffmpeg_checker_label.text = FFMPEGCheckerStatus.from_bool(ffmpeg_is_installed()).value
+        if path_is_valid(data_path) and data_directory_is_formatted():
+            self.format_button.disabled = True
+            self.format_checkbox.active = bool(FormatCheckerStatus.FORMATTED)
+            self.format_label.text = FormatCheckerStatus.FORMATTED.value
+            if target_directory_is_formatted():
+                self.transcript_button.disabled = False
+                self.movie_button.disabled = not ffmpeg_is_installed()
+            else:
+                self.transcript_button.disabled = True
+                self.movie_button.disabled = True  
+        else:
+            self.format_button.disabled = False
+            self.format_checkbox.active = bool(FormatCheckerStatus.UNFORMATTED)
+            self.format_label.text = FormatCheckerStatus.UNFORMATTED.value
+            if not (path_is_valid(data_path) and data_path.exists()):
+                self.format_button.disabled = True
+                self.format_label.text = FormatCheckerStatus.UNSPECIFIED.value
+            self.transcript_button.disabled = True
+            self.movie_button.disabled = True
 
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=True)
-        segmented = segment_transcripts()
-        main_window[WindowElementKey.GENERATE_MOVIE_BUTTON].update(disabled=False)
+class Main(App):
+    def on_start(self):
+        self.root.update_view()
 
-        if segmented == None:
-            continue
+Factory.register('Root', cls=Root)
+Factory.register('LoadDialog', cls=LoadDialog)
+Factory.register('ErrorDialog', cls=ErrorDialog)
 
-        load_images()
-        # fallbackに画像がない場合には処理を停止する
-        if not 'fallback' in images:
-            sg.popup_error('imagesフォルダ下のfallbackフォルダには元データとなる画像を入れてください')
-            continue
-        resize_images()
-        overlay_images_on_background()
-        generate_movies(segmented)
+if __name__ == '__main__':
+    Main().run()

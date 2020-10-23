@@ -1,0 +1,233 @@
+#: kivy 1.1.0
+
+Root:
+    datafile_input: datafile_input
+
+    format_button: format_button
+    format_checkbox: format_checkbox
+    format_label: format_label
+
+    targetfile_input: targetfile_input
+
+    transcript_button: transcript_button
+
+    ffmpeg_checker_label: ffmpeg_checker_label
+
+    movie_button: movie_button
+
+    BoxLayout:
+        orientation: 'vertical'
+        padding: [8, 8]
+        Label:
+            text: '1. データフォルダを選択'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            TextInput:
+                id: datafile_input
+                text: ''
+                multiline: False
+                size_hint_x: .8
+                on_focus: root.textinput_focus(*args)
+            Button:
+                text: '選択'
+                size_hint_x: .2
+                on_release: root.show_data_load()
+        Label:
+            text: '2. データフォルダをフォーマット'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            Button:
+                id: format_button
+                text: 'フォーマット'
+                size_hint_x: .3
+                disabled: True
+                on_release: root.format_data_directory_pressed()
+            CheckBox:
+                id: format_checkbox
+                size_hint_x: .1
+                active: False
+                disabled: True
+            Label:
+                id: format_label
+                text: ''
+                text_size: self.size
+                size_hint_x: .6
+                halign: 'left'
+                valign: 'middle'
+        Label:
+            text: '3. データフォルダ内部に画像を配置（png, jpg, tiff）'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        Label:
+            text: '4. 出力先フォルダを選択'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            Label:
+                text: '※フォルダ名に半角スペースを含めないでください'
+                font_size: 12
+                text_size: self.size
+                size_hint_y: None
+                height: 22
+                halign: 'left'
+                valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            TextInput:
+                id: targetfile_input
+                text: ''
+                multiline: False
+                size_hint_x: .8
+                on_focus: root.textinput_focus(*args)
+            Button:
+                text: '選択'
+                size_hint_x: .2
+                on_release: root.show_target_load()
+        Label:
+            text: '5. よみがなのテキストファイルを生成'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            Button:
+                id: transcript_button
+                text: 'よみがな生成'
+                disabled: True
+                on_release: root.generate_transcripts_pressed()
+        Label:
+            text: '6. （必要であれば）よみがなを修正'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            Label:
+                text: '※ひらがなと無声区間" sp "のみ入力可能です'
+                font_size: 12
+                text_size: self.size
+                size_hint_y: None
+                height: 22
+                halign: 'left'
+                valign: 'middle'
+        Label:
+            text: '7. 口パク動画を生成'
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'left'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            Label:
+                id: ffmpeg_checker_label
+                text: ''
+                font_size: 12
+                text_size: self.size
+                size_hint_y: None
+                height: 22
+                halign: 'left'
+                valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            padding: [8, 0, 0, 0]
+            size_hint_y: None
+            height: 30
+            Button:
+                id: movie_button
+                text: '動画の書き出し'
+                disabled: True
+                on_release: root.generate_movies_pressed()
+        Label:
+            text: '==================================='
+            text_size: self.size
+            size_hint_y: None
+            height: 30
+            halign: 'center'
+            valign: 'middle'
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: None
+            height: 30
+            Button:
+                text: '終了'
+                on_press: app.stop()
+
+<LoadDialog>:
+    BoxLayout:
+        orientation: 'vertical'
+        size: root.size
+        pos: root.pos
+        FileChooserListView:
+            id: filechooser
+            filters: [root.is_dir]
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: None
+            height: 30
+            Button:
+                text: 'キャンセル'
+                on_release: root.cancel()
+            Button:
+                text: 'フォルダを選択'
+                on_release: root.load(filechooser.path, filechooser.selection)
+
+<ErrorDialog>:
+    BoxLayout:
+        orientation: 'vertical'
+        size: root.size
+        pos: root.pos
+        Label:
+            id: description_label
+            text: root.description
+            text_size: root.width, None
+            size: self.texture_size
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: None
+            height: 30
+            Button:
+                text: 'OK'
+                on_release: root.cancel()
