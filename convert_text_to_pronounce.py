@@ -20,7 +20,6 @@ from kivy.config import Config
 Config.set('graphics', 'width', 400)
 Config.set('graphics', 'height', 520)
 Config.set('graphics', 'resizable', False)
-import japanize_kivy
 import kivy
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
@@ -31,6 +30,11 @@ from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.checkbox import CheckBox
 from kivy.core.window import Window
+from kivy.core.text import LabelBase, DEFAULT_FONT
+from kivy.resources import resource_add_path
+
+resource_add_path("./resources")
+LabelBase.register(DEFAULT_FONT, "SourceHanSans-Regular.ttc")
 
 class Error(Exception):
     """ the base class of this application errors.
